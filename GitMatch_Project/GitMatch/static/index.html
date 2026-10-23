@@ -1,0 +1,2070 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GitMatch | Intelligent Open-Source Issue Recommender</title>
+<style>
+  :root {
+    --bg-page: #F8FAFC;
+    --bg-surface: #FFFFFF;
+    --border-subtle: #E2E8F0;
+    --border-focus: #3B82F6;
+    
+    --text-main: #0F172A;
+    --text-muted: #64748B;
+    --text-dim: #94A3B8;
+
+    --brand-primary: #0F172A; /* Deep navy */
+    --brand-blue: #2563EB;
+    --brand-cyan: #0D9488;
+    
+    --chip-bg: #F1F5F9;
+    --chip-text: #334155;
+    
+    --badge-green-bg: #ECFDF5;
+    --badge-green-text: #059669;
+    --badge-green-border: #A7F3D0;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    background: var(--bg-page);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    font-size: 14.5px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Shared keyword highlight */
+  mark {
+    background: #FEF08A;
+    color: #854D0E;
+    padding: 0 3px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  /* ----------------- TOP NAVBAR ----------------- */
+  .navbar {
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0 32px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .brand-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #93C5FD, #3B82F6);
+    color: #FFFFFF;
+    font-weight: 800;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: -0.5px;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+  }
+  .brand-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-main);
+  }
+  .recsys-tag {
+    font-size: 0.72rem;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #EFF6FF;
+    color: #2563EB;
+    border: 1px solid #BFDBFE;
+    font-weight: 600;
+  }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 8px 0;
+    transition: color 0.15s;
+  }
+  .nav-link:hover {
+    color: var(--text-main);
+  }
+  .nav-link.active {
+    color: var(--brand-blue);
+    font-weight: 600;
+    border-bottom: 2px solid var(--brand-blue);
+  }
+  .saved-counter-badge {
+    background: #ECFDF5;
+    color: #059669;
+    border: 1px solid #A7F3D0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+  }
+
+  .github-icon-link {
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    transition: opacity 0.15s;
+  }
+  .github-icon-link:hover {
+    opacity: 0.75;
+  }
+
+  /* ----------------- PAGE LAYOUT ----------------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    min-height: calc(100vh - 64px);
+  }
+
+  /* ----------------- SIDEBAR ----------------- */
+  .sidebar {
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-subtle);
+    padding: 28px 24px 40px;
+    overflow-y: auto;
+  }
+  .sidebar-intro h3 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    line-height: 1.35;
+  }
+  .sidebar-intro p {
+    margin: 0 0 24px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  /* Filter Accordion Cards */
+  .filter-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    padding: 16px;
+  }
+  .filter-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 12px;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Search Input with tags */
+  .search-wrap {
+    position: relative;
+    margin-bottom: 10px;
+  }
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    font-size: 0.88rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: #F8FAFC;
+    color: var(--text-main);
+    outline: none;
+    transition: all 0.15s;
+  }
+  .search-input:focus {
+    background: #FFFFFF;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+
+  /* Active Tags */
+  .active-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #EFF6FF;
+    color: #1E40AF;
+    border: 1px solid #BFDBFE;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+  .tag-chip button {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: #3B82F6;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .tag-chip button:hover {
+    color: #1E3A8A;
+  }
+
+  .suggested-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .clear-all-link {
+    color: var(--brand-blue);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 0;
+  }
+  .clear-all-link:hover { text-decoration: underline; }
+
+  .suggested-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .suggested-pill {
+    background: #F1F5F9;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .suggested-pill:hover {
+    background: #E2E8F0;
+    color: var(--text-main);
+  }
+
+  /* 3-Tier Experience Control */
+  .experience-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .exp-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: #FFFFFF;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .exp-btn.active {
+    border-color: #3B82F6;
+    background: #EFF6FF;
+    color: #1D4ED8;
+    box-shadow: 0 1px 4px rgba(59, 130, 246, 0.15);
+  }
+  .exp-caption {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin: 4px 0 0;
+  }
+
+  /* Target Languages Checkbox Chips */
+  .lang-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .lang-chip {
+    position: relative;
+    cursor: pointer;
+  }
+  .lang-chip input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+  .lang-chip-face {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    background: #FFFFFF;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+  .lang-chip input:checked + .lang-chip-face {
+    border-color: #3B82F6;
+    background: #EFF6FF;
+    color: #1D4ED8;
+    font-weight: 600;
+  }
+  .lang-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #94A3B8;
+  }
+  .lang-chip input:checked + .lang-chip-face .lang-dot {
+    background: #2563EB;
+  }
+
+  /* GitHub Profile Card */
+  .gh-profile-card {
+    background: #F8FAFC;
+    border: 1px dashed #CBD5E1;
+  }
+  .gh-subtext {
+    font-size: 0.77rem;
+    color: var(--text-muted);
+    margin: 0 0 10px;
+    line-height: 1.4;
+  }
+  .gh-input-group {
+    display: flex;
+    gap: 6px;
+  }
+  .gh-username-input {
+    flex: 1;
+    padding: 7px 10px;
+    font-size: 0.82rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: #FFFFFF;
+    color: var(--text-main);
+    outline: none;
+    transition: all 0.15s;
+  }
+  .gh-username-input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  }
+  .gh-btn {
+    background: #0F172A;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .gh-btn:hover {
+    background: #1E293B;
+  }
+  .gh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .gh-status-msg {
+    margin-top: 8px;
+    font-size: 0.76rem;
+    border-radius: 6px;
+    padding: 6px 8px;
+    line-height: 1.35;
+  }
+  .gh-status-msg.success {
+    background: #ECFDF5;
+    color: #065F46;
+    border: 1px solid #A7F3D0;
+  }
+  .gh-status-msg.error {
+    background: #FEF2F2;
+    color: #991B1B;
+    border: 1px solid #FECACA;
+  }
+  .gh-status-msg.loading {
+    background: #EFF6FF;
+    color: #1E40AF;
+    border: 1px solid #BFDBFE;
+  }
+
+  /* Primary Action Buttons */
+  .btn-actions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .primary-find-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--brand-primary);
+    color: #FFFFFF;
+    font-size: 0.93rem;
+    font-weight: 600;
+    padding: 11px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+    transition: all 0.15s;
+  }
+  .primary-find-btn:hover {
+    background: #1E293B;
+    transform: translateY(-1px);
+  }
+  .live-fetch-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #FFFFFF;
+    font-size: 0.92rem;
+    font-weight: 700;
+    padding: 11px 12px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+    transition: all 0.15s;
+  }
+  .live-fetch-btn:hover {
+    background: linear-gradient(135deg, #047857, #065F46);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(5, 150, 105, 0.35);
+  }
+  .live-fetch-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .reset-filters-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 500;
+    margin-top: 10px;
+    cursor: pointer;
+    padding: 6px;
+  }
+  .reset-filters-btn:hover {
+    color: var(--text-main);
+  }
+
+  /* ----------------- MAIN RESULTS VIEW ----------------- */
+  main {
+    padding: 32px 40px 60px;
+    max-width: 980px;
+  }
+
+  /* Hero Banner */
+  .hero-banner {
+    background: linear-gradient(135deg, #EFF6FF 0%, #E0E7FF 50%, #DBEAFE 100%);
+    border: 1px solid #BFDBFE;
+    border-radius: 16px;
+    padding: 32px 36px;
+    margin-bottom: 28px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .hero-left {
+    max-width: 580px;
+    position: relative;
+    z-index: 2;
+  }
+  .personalized-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #FFFFFF;
+    color: #2563EB;
+    border: 1px solid #BFDBFE;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 11px;
+    border-radius: 999px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+  }
+  .hero-title {
+    font-size: 1.85rem;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: #0F172A;
+    margin: 0 0 6px;
+    line-height: 1.2;
+  }
+  .hero-subtitle {
+    margin: 0;
+    color: #475569;
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+
+  .hero-illustration {
+    position: relative;
+    z-index: 2;
+    flex-shrink: 0;
+    width: 140px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .floating-card {
+    background: #FFFFFF;
+    border-radius: 14px;
+    padding: 16px 20px;
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.15);
+    border: 1px solid #E2E8F0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .floating-card svg {
+    color: #0F172A;
+  }
+
+  /* Results Header Bar */
+  .results-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 20px;
+  }
+  .results-counter-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 6px;
+  }
+  .filter-summary-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.84rem;
+    color: var(--text-muted);
+  }
+  .active-filter-badge {
+    background: #EFF6FF;
+    color: #2563EB;
+    border: 1px solid #DBEAFE;
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .sort-select-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .sort-select {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: var(--text-main);
+    cursor: pointer;
+  }
+
+  /* ----------------- ISSUE CARDS ----------------- */
+  .cards-deck {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .card-item {
+    background: #FFFFFF;
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    transition: all 0.25s ease;
+    overflow: visible;
+  }
+  .card-item:hover {
+    border-color: #CBD5E1;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    transform: translateY(-1px);
+  }
+
+  /* Dismiss animation */
+  .card-item.dismissing {
+    opacity: 0;
+    transform: translateX(40px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-width: 0;
+    overflow: hidden;
+  }
+
+  .card-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .meta-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+  }
+  .github-repo-title {
+    font-weight: 700;
+    color: var(--text-main);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .github-repo-title:hover {
+    color: var(--brand-blue);
+    text-decoration: underline;
+  }
+
+  .meta-pill {
+    background: #F1F5F9;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .meta-pill.unclaimed {
+    background: #ECFDF5;
+    color: #059669;
+    border: 1px solid #A7F3D0;
+    font-weight: 600;
+  }
+  .meta-pill.live-badge {
+    background: #ECFDF5;
+    color: #047857;
+    border: 1px solid #6EE7B7;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10B981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: pulse-green 1.8s infinite;
+  }
+  @keyframes pulse-green {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  }
+
+  /* Circular Match Ring */
+  .match-ring-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    cursor: help;
+  }
+  .ring-svg {
+    width: 38px;
+    height: 38px;
+    transform: rotate(-90deg);
+  }
+  .ring-circle-bg {
+    fill: none;
+    stroke: #E2E8F0;
+    stroke-width: 3.5;
+  }
+  .ring-circle-fill {
+    fill: none;
+    stroke: #0D9488;
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s ease;
+  }
+  .match-text-group {
+    display: flex;
+    flex-direction: column;
+    text-align: right;
+  }
+  .match-percent {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #0F172A;
+    line-height: 1;
+  }
+  .match-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* Explainable AI Score Breakdown Popover */
+  .score-breakdown-popover {
+    display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 275px;
+    background: #0F172A;
+    color: #F8FAFC;
+    padding: 12px 14px;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+    z-index: 100;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    text-align: left;
+    pointer-events: none;
+  }
+  .score-breakdown-popover::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    right: 18px;
+    width: 12px;
+    height: 12px;
+    background: #0F172A;
+    transform: rotate(45deg);
+  }
+  .match-ring-box:hover .score-breakdown-popover,
+  .match-ring-box:focus .score-breakdown-popover {
+    display: block;
+  }
+  .popover-header {
+    font-weight: 700;
+    color: #38BDF8;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .popover-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    color: #CBD5E1;
+  }
+  .popover-row strong {
+    color: #FFFFFF;
+    font-weight: 600;
+  }
+  .popover-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 6px 0;
+  }
+  .popover-footer {
+    display: flex;
+    justify-content: space-between;
+    color: #34D399;
+    font-weight: 700;
+  }
+
+  /* Issue Title */
+  .issue-main-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 8px;
+    line-height: 1.35;
+  }
+  .issue-main-title a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .issue-main-title a:hover {
+    color: var(--brand-blue);
+  }
+
+  .issue-snippet-preview {
+    font-size: 0.88rem;
+    color: #475569;
+    margin: 0 0 14px;
+    line-height: 1.5;
+  }
+
+  /* Why recommended tag box */
+  .why-recommended-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 6px 12px;
+    margin-bottom: 14px;
+    font-size: 0.78rem;
+  }
+  .why-title {
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .why-badge {
+    background: #EFF6FF;
+    color: #1E40AF;
+    border: 1px solid #DBEAFE;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .why-badge.green {
+    background: #ECFDF5;
+    color: #065F46;
+    border-color: #A7F3D0;
+  }
+
+  /* Card Bottom Action Bar */
+  .card-bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px solid #F1F5F9;
+  }
+  .labels-deck {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .label-pill {
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: #F1F5F9;
+    color: #475569;
+  }
+  .label-pill.enhancement { background: #EFF6FF; color: #1D4ED8; }
+  .label-pill.bug { background: #FEF2F2; color: #DC2626; }
+  .label-pill.api { background: #F5F3FF; color: #7C3AED; }
+
+  .actions-right {
+    display: flex;
+    gap: 8px;
+  }
+  .btn-interested {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #FFFFFF;
+    border: 1px solid #A7F3D0;
+    color: #059669;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-interested:hover {
+    background: #ECFDF5;
+  }
+  .btn-interested.active {
+    background: #059669;
+    border-color: #059669;
+    color: #FFFFFF;
+  }
+
+  .btn-dismiss {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #FFFFFF;
+    border: 1px solid var(--border-subtle);
+    color: #64748B;
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-dismiss:hover {
+    background: #F8FAFC;
+    color: #0F172A;
+    border-color: #CBD5E1;
+  }
+
+  /* Empty state */
+  .empty-box {
+    background: #FFFFFF;
+    border: 1px dashed #CBD5E1;
+    border-radius: 14px;
+    padding: 48px;
+    text-align: center;
+  }
+  .empty-box h4 {
+    margin: 0 0 6px;
+    font-size: 1.15rem;
+    color: #0F172A;
+  }
+  .empty-box p {
+    margin: 0;
+    color: #64748B;
+  }
+
+  /* Saved Backlog View Header */
+  .saved-view-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  /* Modals */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(3px);
+  }
+  .modal-dialog {
+    background: #FFFFFF;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 640px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 28px 32px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+    position: relative;
+  }
+  .modal-close {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    color: #64748B;
+  }
+  .modal-dialog h3 {
+    margin: 0 0 16px;
+    font-size: 1.35rem;
+    color: #0F172A;
+    font-weight: 700;
+  }
+  
+  /* Guide step cards */
+  .guide-step {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 18px;
+    background: #F8FAFC;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .step-num-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #EFF6FF;
+    color: #2563EB;
+    border: 1px solid #BFDBFE;
+    font-weight: 800;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-content h4 {
+    margin: 0 0 4px;
+    font-size: 0.95rem;
+    color: #0F172A;
+  }
+  .step-content p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #475569;
+    line-height: 1.5;
+  }
+
+  .tech-math-box {
+    margin-top: 18px;
+    background: #F1F5F9;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.8rem;
+    color: #334155;
+  }
+  .tech-math-box summary {
+    font-weight: 700;
+    color: #2563EB;
+    cursor: pointer;
+    outline: none;
+  }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--border-subtle); }
+    main { padding: 24px 16px; }
+    .hero-banner { flex-direction: column; align-items: flex-start; gap: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP NAVBAR -->
+<header class="navbar">
+  <div class="nav-left">
+    <div class="brand-icon">GM</div>
+    <span class="brand-name">GitMatch</span>
+    <span class="recsys-tag">Hybrid RecSys</span>
+  </div>
+  <nav class="nav-right">
+    <button class="nav-link active" id="nav-home" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      Home
+    </button>
+    <button class="nav-link" id="nav-saved" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+      <span>Saved Issues</span>
+      <span class="saved-counter-badge" id="saved-badge-count">0</span>
+    </button>
+    <button class="nav-link" id="nav-how" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+      How it works
+    </button>
+    <button class="nav-link" id="nav-about" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+      About
+    </button>
+    <a class="github-icon-link" href="https://github.com" target="_blank" rel="noopener noreferrer" title="View GitHub">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+    </a>
+  </nav>
+</header>
+
+<div class="layout">
+  <!-- SIDEBAR CONTROLS -->
+  <aside class="sidebar">
+    <div class="sidebar-intro">
+      <h3>Find good first issues that match your skills and interests.</h3>
+      <p>A content-based recommender using real GitHub issues.</p>
+    </div>
+
+    <!-- 0. GitHub Profile Auto-Importer -->
+    <div class="filter-card gh-profile-card">
+      <div class="filter-card-header" style="margin-bottom: 6px;">
+        <div class="header-left">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>Import GitHub Profile</span>
+        </div>
+        <span style="font-size: 0.7rem; color: #2563EB; font-weight: 600; background: #EFF6FF; padding: 2px 7px; border-radius: 4px;">Auto-fill</span>
+      </div>
+      <p class="gh-subtext">Fetch your public repos & languages to personalize recommendations automatically.</p>
+      <div class="gh-input-group">
+        <input type="text" id="gh-username-input" class="gh-username-input" placeholder="e.g. torvalds or your username">
+        <button type="button" id="gh-import-btn" class="gh-btn">Import</button>
+      </div>
+      <div id="gh-status-msg" class="gh-status-msg" hidden></div>
+    </div>
+
+    <form id="filter-form" autocomplete="off">
+      <!-- 1. Skills & Tech Interests -->
+      <div class="filter-card">
+        <div class="filter-card-header">
+          <div class="header-left">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+            <span>Skills & Tech Interests</span>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>
+        </div>
+
+        <div class="search-wrap">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input class="search-input" id="search-box" type="text" placeholder="Type skills or select below..." value="python api backend">
+        </div>
+
+        <div class="active-tags" id="active-tags-list"></div>
+
+        <div class="suggested-row">
+          <span>Suggested</span>
+          <button class="clear-all-link" id="clear-tags-btn" type="button">Clear all</button>
+        </div>
+
+        <div class="suggested-pills">
+          <span class="suggested-pill" data-skill="React">React</span>
+          <span class="suggested-pill" data-skill="Machine Learning">Machine Learning</span>
+          <span class="suggested-pill" data-skill="Data Cleaning">Data Cleaning</span>
+          <span class="suggested-pill" data-skill="Go Backend">Go Backend</span>
+          <span class="suggested-pill" data-skill="Java API">Java API</span>
+          <span class="suggested-pill" data-skill="Docker">Docker</span>
+        </div>
+      </div>
+
+      <!-- 2. Experience Level -->
+      <div class="filter-card">
+        <div class="filter-card-header">
+          <div class="header-left">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>Experience Level</span>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>
+        </div>
+
+        <div class="experience-grid">
+          <button type="button" class="exp-btn active" data-level="beginner">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            <span>Beginner</span>
+          </button>
+          <button type="button" class="exp-btn" data-level="intermediate">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            <span>Intermediate</span>
+          </button>
+          <button type="button" class="exp-btn" data-level="advanced">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+            <span>Advanced</span>
+          </button>
+        </div>
+        <p class="exp-caption" id="exp-explanation">Beginner prioritizes documentation & starter tags. Intermediate focuses on enhancements & refactoring.</p>
+      </div>
+
+      <!-- 3. Target Languages -->
+      <div class="filter-card">
+        <div class="filter-card-header">
+          <div class="header-left">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            <span>Target Languages</span>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>
+        </div>
+
+        <div class="lang-grid" id="lang-chips-deck"></div>
+      </div>
+
+      <div class="btn-actions-grid">
+        <button class="primary-find-btn" id="find-issues-btn" type="submit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          Find in Catalog (971)
+        </button>
+        <button class="live-fetch-btn" id="live-fetch-btn" type="button" title="Query GitHub REST API for fresh open-source issues right now">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <span>⚡ Search Live GitHub</span>
+        </button>
+      </div>
+
+      <button class="reset-filters-btn" id="reset-all-btn" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+        Reset Filters
+      </button>
+    </form>
+  </aside>
+
+  <!-- MAIN VIEW -->
+  <main>
+    <!-- RECOMMENDATIONS VIEW -->
+    <div id="recommendations-view">
+      <!-- Hero Banner (Personalized for you) -->
+      <section class="hero-banner">
+        <div class="hero-left">
+          <span class="personalized-pill">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            Personalized for you
+          </span>
+          <h1 class="hero-title">Recommended Issues</h1>
+          <p class="hero-subtitle">Open-source issues matching your skills, interests and experience level.</p>
+        </div>
+
+        <div class="hero-illustration">
+          <div class="floating-card">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- Results Subheader -->
+      <div class="results-header-bar">
+        <div>
+          <h2 class="results-counter-title" id="results-count-title">5 Recommended Issues</h2>
+          <div class="filter-summary-row" id="filter-summary-row">
+            <span>Filtered to</span>
+          </div>
+        </div>
+
+        <div class="sort-select-wrap">
+          <span>Sort by</span>
+          <select class="sort-select" id="sort-select">
+            <option value="best" selected>Best Match</option>
+            <option value="comments">Fewest Comments</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- CARDS DECK -->
+      <div class="cards-deck" id="cards-container"></div>
+    </div>
+
+    <!-- SAVED ISSUES VIEW (CONTRIBUTION BACKLOG) -->
+    <div id="saved-view-container" hidden>
+      <div class="saved-view-header">
+        <div>
+          <h1 class="hero-title" style="font-size: 1.6rem;">My Saved Issues Backlog</h1>
+          <p class="hero-subtitle">Issues you marked as interested. Your personal open-source contribution to-do list.</p>
+        </div>
+        <button class="btn-dismiss" id="clear-all-saved-btn" style="padding: 7px 14px;">Clear All</button>
+      </div>
+      <div class="cards-deck" id="saved-cards-container"></div>
+    </div>
+  </main>
+</div>
+
+<!-- HOW IT WORKS MODAL -->
+<div class="modal-overlay" id="how-modal" hidden>
+  <div class="modal-dialog">
+    <button class="modal-close" id="close-how-modal-btn">&times;</button>
+    <h3>How to Use GitMatch</h3>
+
+    <div class="guide-step">
+      <div class="step-num-icon">1</div>
+      <div class="step-content">
+        <h4>Choose Your Tech Stack</h4>
+        <p>Type keywords in the search bar (like <code>FastAPI</code>, <code>React</code>, or <code>data cleaning</code>) or click suggested tags, and pick your target programming languages.</p>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="step-num-icon">2</div>
+      <div class="step-content">
+        <h4>Pick Your Experience Level</h4>
+        <p><strong>Beginner:</strong> Surfaces friendly starter tickets, documentation fixes, and unclaimed issues (0 comments).<br>
+        <strong>Intermediate:</strong> Focuses on actual coding tasks (bug fixes, enhancements, refactors).<br>
+        <strong>Advanced:</strong> Suppresses simple typo fixes and targets deep architecture, performance, and core tickets.</p>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="step-num-icon">3</div>
+      <div class="step-content">
+        <h4>Interact & Save</h4>
+        <p>Click <strong>Interested</strong> to bookmark an issue to your backlog and teach the recommender to surface more from that repository. Click <strong>Dismiss</strong> to remove it and immediately get a fresh replacement.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ABOUT MODAL -->
+<div class="modal-overlay" id="about-modal" hidden>
+  <div class="modal-dialog">
+    <button class="modal-close" id="close-about-modal-btn">&times;</button>
+    <h3>About GitMatch</h3>
+    <p><strong>GitMatch</strong> is an intelligent open-source issue recommender designed for computer science students and developers looking to make their first meaningful open-source contributions.</p>
+    <p>Instead of manually browsing through thousands of GitHub repositories, GitMatch builds a personalized user profile based on your tech stack, languages, and experience level, matching you to issues you can realistically solve.</p>
+    <p style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-subtle); font-size: 0.85rem; color: var(--text-muted);">
+      <strong>Project Context:</strong> 3rd-Year Recommender Systems Course Mini-Project.<br>
+      <strong>Stack:</strong> Python 3.13, FastAPI, Scikit-learn (Bigram TF-IDF), Cosine Similarity, GitHub REST API, Vanilla HTML/CSS/JS.
+    </p>
+  </div>
+</div>
+
+<script>
+(function() {
+  var state = {
+    experience: "beginner",
+    skills: ["Python", "API", "Backend"],
+    languages: ["python"],
+    likedUrls: new Set(),
+    dislikedUrls: new Set(),
+    savedItemsMap: new Map(), // Stores full issue object for Saved view
+    candidatePool: [],
+    currentView: "home" // "home" or "saved"
+  };
+
+  var searchBox = document.getElementById("search-box");
+  var activeTagsList = document.getElementById("active-tags-list");
+  var clearTagsBtn = document.getElementById("clear-tags-btn");
+  var expButtons = document.querySelectorAll(".exp-btn");
+  var langChipsDeck = document.getElementById("lang-chips-deck");
+  var filterForm = document.getElementById("filter-form");
+  var cardsContainer = document.getElementById("cards-container");
+  var resultsCountTitle = document.getElementById("results-count-title");
+  var filterSummaryRow = document.getElementById("filter-summary-row");
+  var resetAllBtn = document.getElementById("reset-all-btn");
+  var expExplanation = document.getElementById("exp-explanation");
+  var savedBadgeCount = document.getElementById("saved-badge-count");
+  var recommendationsView = document.getElementById("recommendations-view");
+  var savedViewContainer = document.getElementById("saved-view-container");
+  var savedCardsContainer = document.getElementById("saved-cards-container");
+  var clearAllSavedBtn = document.getElementById("clear-all-saved-btn");
+  var sortSelect = document.getElementById("sort-select");
+
+  // Live GitHub & Profile Importer elements
+  var liveFetchBtn = document.getElementById("live-fetch-btn");
+  var ghUsernameInput = document.getElementById("gh-username-input");
+  var ghImportBtn = document.getElementById("gh-import-btn");
+  var ghStatusMsg = document.getElementById("gh-status-msg");
+
+  var navHome = document.getElementById("nav-home");
+  var navSaved = document.getElementById("nav-saved");
+  var navHow = document.getElementById("nav-how");
+  var navAbout = document.getElementById("nav-about");
+  var howModal = document.getElementById("how-modal");
+  var aboutModal = document.getElementById("about-modal");
+  var closeHowModalBtn = document.getElementById("close-how-modal-btn");
+  var closeAboutModalBtn = document.getElementById("close-about-modal-btn");
+
+  // Navigation handlers
+  navHow.addEventListener("click", function() { howModal.hidden = false; });
+  closeHowModalBtn.addEventListener("click", function() { howModal.hidden = true; });
+  howModal.addEventListener("click", function(e) { if (e.target === howModal) howModal.hidden = true; });
+
+  navAbout.addEventListener("click", function() { aboutModal.hidden = false; });
+  closeAboutModalBtn.addEventListener("click", function() { aboutModal.hidden = true; });
+  aboutModal.addEventListener("click", function(e) { if (e.target === aboutModal) aboutModal.hidden = true; });
+
+  // View Switching (Home vs Saved)
+  navHome.addEventListener("click", function() {
+    state.currentView = "home";
+    navHome.classList.add("active");
+    navSaved.classList.remove("active");
+    recommendationsView.hidden = false;
+    savedViewContainer.hidden = true;
+  });
+
+  navSaved.addEventListener("click", function() {
+    state.currentView = "saved";
+    navSaved.classList.add("active");
+    navHome.classList.remove("active");
+    recommendationsView.hidden = true;
+    savedViewContainer.hidden = false;
+    renderSavedView();
+  });
+
+  clearAllSavedBtn.addEventListener("click", function() {
+    state.likedUrls.clear();
+    state.savedItemsMap.clear();
+    updateSavedBadge();
+    renderSavedView();
+    loadRecommendations(true);
+  });
+
+  function updateSavedBadge() {
+    savedBadgeCount.textContent = state.savedItemsMap.size;
+  }
+
+  // Experience level control
+  expButtons.forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      expButtons.forEach(function(b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      state.experience = btn.dataset.level;
+      if (state.experience === "beginner") {
+        expExplanation.textContent = "Beginner prioritizes documentation & starter tags. Intermediate focuses on enhancements & refactoring.";
+      } else if (state.experience === "intermediate") {
+        expExplanation.textContent = "Intermediate prioritizes feature additions, refactoring, and bug fixes.";
+      } else {
+        expExplanation.textContent = "Advanced focuses on architecture, performance, security, and complex core modules.";
+      }
+      loadRecommendations();
+    });
+  });
+
+  // Render active tags from state
+  function renderActiveTags() {
+    activeTagsList.innerHTML = "";
+    state.skills.forEach(function(skill, idx) {
+      var tag = document.createElement("span");
+      tag.className = "tag-chip";
+      tag.innerHTML = skill + ' <button type="button" data-idx="' + idx + '">&times;</button>';
+      activeTagsList.appendChild(tag);
+    });
+
+    activeTagsList.querySelectorAll("button").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        var idx = parseInt(btn.dataset.idx, 10);
+        state.skills.splice(idx, 1);
+        searchBox.value = state.skills.join(" ");
+        renderActiveTags();
+        loadRecommendations();
+      });
+    });
+  }
+
+  // Clear all tags
+  clearTagsBtn.addEventListener("click", function() {
+    state.skills = [];
+    searchBox.value = "";
+    renderActiveTags();
+    loadRecommendations();
+  });
+
+  // Suggested pills
+  document.querySelectorAll(".suggested-pill").forEach(function(pill) {
+    pill.addEventListener("click", function() {
+      var sk = pill.dataset.skill;
+      if (!state.skills.includes(sk)) {
+        state.skills.push(sk);
+        searchBox.value = state.skills.join(" ");
+        renderActiveTags();
+        loadRecommendations();
+      }
+    });
+  });
+
+  // Search input typing
+  searchBox.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      var words = searchBox.value.split(/\s+/).filter(Boolean);
+      state.skills = words;
+      renderActiveTags();
+      loadRecommendations();
+    }
+  });
+
+  // Reset all filters
+  resetAllBtn.addEventListener("click", function() {
+    state.skills = ["Python", "API", "Backend"];
+    searchBox.value = "python api backend";
+    state.experience = "beginner";
+    expButtons.forEach(function(b) { b.classList.toggle("active", b.dataset.level === "beginner"); });
+    renderActiveTags();
+    loadRecommendations();
+  });
+
+  filterForm.addEventListener("submit", function(e) {
+    e.preventDefault();
+    var words = searchBox.value.split(/\s+/).filter(Boolean);
+    if (words.length) state.skills = words;
+    renderActiveTags();
+    loadRecommendations();
+  });
+
+  // Highlight words
+  function highlightWords(text, wordsSet) {
+    var parent = document.createElement("span");
+    var parts = String(text || "").split(/(\b[\w-]+\b)/);
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i];
+      if (!part) continue;
+      if (wordsSet && wordsSet.has(part.toLowerCase())) {
+        var m = document.createElement("mark");
+        m.textContent = part;
+        parent.appendChild(m);
+      } else {
+        parent.appendChild(document.createTextNode(part));
+      }
+    }
+    return parent;
+  }
+
+  // Generate SVG circular match meter with Explainable AI popover
+  function makeMatchMeterSvg(score, breakdown) {
+    var radius = 15;
+    var circumference = 2 * Math.PI * radius;
+    var percent = Math.min(100, Math.max(10, Math.round(score * 100)));
+    var offset = circumference - (percent / 100) * circumference;
+
+    var popoverHtml = "";
+    if (breakdown && breakdown.weights) {
+      var w = breakdown.weights;
+      popoverHtml = `
+        <div class="score-breakdown-popover">
+          <div class="popover-header">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            <span>Explainable AI (XAI) Breakdown</span>
+          </div>
+          <div class="popover-row">
+            <span>TF-IDF Text Match (${w.text}%):</span>
+            <strong>+${breakdown.text_sim}</strong>
+          </div>
+          <div class="popover-row">
+            <span>Skill Overlap (${w.skill}%):</span>
+            <strong>+${breakdown.skill_match}</strong>
+          </div>
+          <div class="popover-row">
+            <span>Unclaimed Ticket (${w.unclaimed}%):</span>
+            <strong>+${breakdown.unclaimed}</strong>
+          </div>
+          <div class="popover-row">
+            <span>Experience Fit (${w.exp}%):</span>
+            <strong>${breakdown.exp_fit >= 0 ? '+' : ''}${breakdown.exp_fit}</strong>
+          </div>
+          <div class="popover-divider"></div>
+          <div class="popover-footer">
+            <span>Final Match Metric:</span>
+            <span>${percent}%</span>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="match-ring-box" tabindex="0" title="Inspect score breakdown">
+        <svg class="ring-svg" viewBox="0 0 38 38">
+          <circle class="ring-circle-bg" cx="19" cy="19" r="${radius}"></circle>
+          <circle class="ring-circle-fill" cx="19" cy="19" r="${radius}" 
+                  stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"></circle>
+        </svg>
+        <div class="match-text-group">
+          <span class="match-percent">${percent}%</span>
+          <span class="match-label">Match</span>
+        </div>
+        ${popoverHtml}
+      </div>
+    `;
+  }
+
+  // Render active summary
+  function updateSummaryBar(data) {
+    var prefix = data.source === "live_github" ? "⚡ Live GitHub: " : "";
+    resultsCountTitle.textContent = prefix + data.results.length + " Recommended Issues";
+    filterSummaryRow.innerHTML = "<span>Filtered to</span>";
+    
+    if (data.source === "live_github") {
+      var liveBadge = document.createElement("span");
+      liveBadge.className = "active-filter-badge";
+      liveBadge.style.background = "#ECFDF5";
+      liveBadge.style.color = "#047857";
+      liveBadge.style.borderColor = "#A7F3D0";
+      liveBadge.textContent = "• Real-Time GitHub API";
+      filterSummaryRow.appendChild(liveBadge);
+    }
+
+    (data.languages || []).forEach(function(l) {
+      var b = document.createElement("span");
+      b.className = "active-filter-badge";
+      b.textContent = "• " + l;
+      filterSummaryRow.appendChild(b);
+    });
+
+    state.skills.slice(0, 3).forEach(function(s) {
+      var b = document.createElement("span");
+      b.className = "active-filter-badge";
+      b.textContent = "• " + s.toLowerCase();
+      filterSummaryRow.appendChild(b);
+    });
+
+    var lvl = document.createElement("span");
+    lvl.className = "active-filter-badge";
+    lvl.textContent = "• " + state.experience.charAt(0).toUpperCase() + state.experience.slice(1) + " level";
+    filterSummaryRow.appendChild(lvl);
+  }
+
+  // Create single card DOM element
+  function createCardElement(item, isSavedView) {
+    var card = document.createElement("article");
+    card.className = "card-item";
+    card.dataset.url = item.url;
+
+    var wordsSet = new Set((item.matched_words || []).map(function(w) { return w.toLowerCase(); }));
+
+    // Top Row
+    var topRow = document.createElement("div");
+    topRow.className = "card-top-row";
+
+    var metaLeft = document.createElement("div");
+    metaLeft.className = "meta-left";
+    
+    var liveHtml = item.is_live ? '<span class="meta-pill live-badge"><span class="pulse-dot"></span> ⚡ Live</span>' : '';
+
+    metaLeft.innerHTML = `
+      <a class="github-repo-title" href="https://github.com/${item.repo}" target="_blank" rel="noopener noreferrer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        ${item.repo}
+      </a>
+      ${liveHtml}
+      <span class="meta-pill">• ${item.language}</span>
+      <span class="meta-pill ${item.comments === 0 ? 'unclaimed' : ''}">
+        ${item.comments === 0 ? '0 comments • Unclaimed' : item.comments + ' comments'}
+      </span>
+    `;
+
+    topRow.appendChild(metaLeft);
+    if (!isSavedView) {
+      topRow.insertAdjacentHTML("beforeend", makeMatchMeterSvg(item.score, item.score_breakdown));
+    }
+    card.appendChild(topRow);
+
+    // Title
+    var titleH3 = document.createElement("h3");
+    titleH3.className = "issue-main-title";
+    var titleLink = document.createElement("a");
+    titleLink.href = item.url;
+    titleLink.target = "_blank";
+    titleLink.rel = "noopener noreferrer";
+    titleLink.appendChild(highlightWords(item.title, wordsSet));
+    titleH3.appendChild(titleLink);
+    card.appendChild(titleH3);
+
+    // Snippet preview
+    if (item.snippet) {
+      var snip = document.createElement("p");
+      snip.className = "issue-snippet-preview";
+      snip.appendChild(highlightWords(item.snippet, wordsSet));
+      card.appendChild(snip);
+    }
+
+    // Why Recommended XAI bar
+    if (item.reasons && item.reasons.length) {
+      var whyBar = document.createElement("div");
+      whyBar.className = "why-recommended-bar";
+      whyBar.innerHTML = '<span class="why-title">Why Recommended:</span>';
+      item.reasons.forEach(function(r) {
+        var isG = r.includes("Unclaimed") || r.includes("Saved");
+        whyBar.innerHTML += `<span class="why-badge ${isG ? 'green' : ''}">${r}</span>`;
+      });
+      card.appendChild(whyBar);
+    }
+
+    // Bottom Row
+    var bottomRow = document.createElement("div");
+    bottomRow.className = "card-bottom-row";
+
+    // Labels
+    var labelsDeck = document.createElement("div");
+    labelsDeck.className = "labels-deck";
+    (item.labels || []).forEach(function(lbl) {
+      var l = lbl.toLowerCase();
+      var cls = "label-pill";
+      if (l.includes("enhancement") || l.includes("feature")) cls += " enhancement";
+      else if (l.includes("bug") || l.includes("fix")) cls += " bug";
+      else if (l.includes("api") || l.includes("backend")) cls += " api";
+      labelsDeck.innerHTML += `<span class="${cls}">${lbl}</span>`;
+    });
+    bottomRow.appendChild(labelsDeck);
+
+    // Actions
+    var actionsRight = document.createElement("div");
+    actionsRight.className = "actions-right";
+
+    if (isSavedView) {
+      // Saved View Actions: Open on GitHub & Remove
+      var btnOpen = document.createElement("a");
+      btnOpen.href = item.url;
+      btnOpen.target = "_blank";
+      btnOpen.rel = "noopener noreferrer";
+      btnOpen.className = "btn-interested active";
+      btnOpen.style.textDecoration = "none";
+      btnOpen.innerHTML = `<span>Open Issue ↗</span>`;
+
+      var btnRemove = document.createElement("button");
+      btnRemove.type = "button";
+      btnRemove.className = "btn-dismiss";
+      btnRemove.innerHTML = `<span>Remove</span>`;
+      btnRemove.addEventListener("click", function() {
+        state.likedUrls.delete(item.url);
+        state.savedItemsMap.delete(item.url);
+        updateSavedBadge();
+        card.remove();
+        if (state.savedItemsMap.size === 0) renderSavedView();
+      });
+
+      actionsRight.appendChild(btnOpen);
+      actionsRight.appendChild(btnRemove);
+    } else {
+      // Recommendations View Actions: Interested & Dismiss
+      var isLiked = state.likedUrls.has(item.url) || item.is_liked;
+      var btnInterested = document.createElement("button");
+      btnInterested.type = "button";
+      btnInterested.className = "btn-interested" + (isLiked ? " active" : "");
+      btnInterested.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span>${isLiked ? '✓ Interested' : 'Interested'}</span>
+      `;
+
+      btnInterested.addEventListener("click", function() {
+        if (state.likedUrls.has(item.url)) {
+          state.likedUrls.delete(item.url);
+          state.savedItemsMap.delete(item.url);
+          btnInterested.classList.remove("active");
+          btnInterested.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Interested</span>
+          `;
+        } else {
+          state.likedUrls.add(item.url);
+          state.savedItemsMap.set(item.url, item);
+          state.dislikedUrls.delete(item.url);
+          btnInterested.classList.add("active");
+          btnInterested.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>✓ Interested</span>
+          `;
+          // Trigger Rocchio reinforcement reload
+          loadRecommendations(true);
+        }
+        updateSavedBadge();
+      });
+
+      var btnDismiss = document.createElement("button");
+      btnDismiss.type = "button";
+      btnDismiss.className = "btn-dismiss";
+      btnDismiss.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        <span>Dismiss</span>
+      `;
+
+      btnDismiss.addEventListener("click", function() {
+        state.dislikedUrls.add(item.url);
+        state.likedUrls.delete(item.url);
+        state.savedItemsMap.delete(item.url);
+        updateSavedBadge();
+
+        card.classList.add("dismissing");
+        setTimeout(function() {
+          card.remove();
+          state.currentDisplayed = (state.currentDisplayed || []).filter(function(x) { return x.url !== item.url; });
+          if (state.candidatePool.length > 0) {
+            var nextItem = state.candidatePool.shift();
+            state.currentDisplayed.push(nextItem);
+            renderDisplayedCards();
+          } else {
+            loadRecommendations(true);
+          }
+        }, 280);
+      });
+
+      actionsRight.appendChild(btnInterested);
+      actionsRight.appendChild(btnDismiss);
+    }
+
+    bottomRow.appendChild(actionsRight);
+    card.appendChild(bottomRow);
+
+    return card;
+  }
+
+  // Render Saved View Backlog
+  function renderSavedView() {
+    savedCardsContainer.innerHTML = "";
+    if (state.savedItemsMap.size === 0) {
+      savedCardsContainer.innerHTML = `
+        <div class="empty-box">
+          <h4>No saved issues yet</h4>
+          <p>Click the <strong>Interested</strong> button on any recommended issue to add it to your contribution backlog.</p>
+        </div>
+      `;
+      return;
+    }
+
+    state.savedItemsMap.forEach(function(item) {
+      savedCardsContainer.appendChild(createCardElement(item, true));
+    });
+  }
+
+  // Load and render recommendations
+  async function loadRecommendations(silent, isLive) {
+    var q = state.skills.join(" ").trim() || searchBox.value.trim() || "python";
+    var checkedLangs = Array.from(langChipsDeck.querySelectorAll("input:checked")).map(function(c) { return c.value; });
+
+    var params = new URLSearchParams({
+      q: q,
+      top_n: 12,
+      languages: checkedLangs.join(","),
+      experience_level: state.experience,
+      liked_urls: Array.from(state.likedUrls).join(","),
+      disliked_urls: Array.from(state.dislikedUrls).join(",")
+    });
+
+    if (isLive) {
+      params.set("live", "true");
+      if (liveFetchBtn) {
+        liveFetchBtn.disabled = true;
+        liveFetchBtn.innerHTML = `<span>⏳ Searching Live GitHub...</span>`;
+      }
+    }
+
+    try {
+      var res = await fetch("/api/recommend?" + params.toString());
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      var data = await res.json();
+
+      updateSummaryBar(data);
+
+      cardsContainer.innerHTML = "";
+      if (!data.results.length) {
+        cardsContainer.innerHTML = `
+          <div class="empty-box">
+            <h4>No issues matched your filters</h4>
+            <p>Try clicking a suggested skill tag on the left or adding more programming languages.</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Store any previously saved items
+      data.results.forEach(function(item) {
+        if (state.likedUrls.has(item.url)) {
+          state.savedItemsMap.set(item.url, item);
+        }
+      });
+      updateSavedBadge();
+
+      state.currentDisplayed = data.results.slice(0, 5);
+      state.candidatePool = data.results.slice(5);
+
+      renderDisplayedCards();
+
+    } catch (err) {
+      console.error("Failed to load recommendations", err);
+    } finally {
+      if (liveFetchBtn) {
+        liveFetchBtn.disabled = false;
+        liveFetchBtn.innerHTML = `
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <span>⚡ Search Live GitHub</span>
+        `;
+      }
+    }
+  }
+
+  // Live search button listener
+  if (liveFetchBtn) {
+    liveFetchBtn.addEventListener("click", function() {
+      loadRecommendations(false, true);
+    });
+  }
+
+  // GitHub User Profile Importer
+  async function handleGitHubImport() {
+    var user = ghUsernameInput.value.trim();
+    if (!user) {
+      ghStatusMsg.hidden = false;
+      ghStatusMsg.className = "gh-status-msg error";
+      ghStatusMsg.textContent = "Please enter a GitHub username.";
+      return;
+    }
+
+    ghImportBtn.disabled = true;
+    ghStatusMsg.hidden = false;
+    ghStatusMsg.className = "gh-status-msg loading";
+    ghStatusMsg.textContent = "Fetching public repositories for @" + user + "...";
+
+    try {
+      var res = await fetch("/api/github-user?username=" + encodeURIComponent(user));
+      var profile = await res.json();
+      if (!profile.success) {
+        ghStatusMsg.className = "gh-status-msg error";
+        ghStatusMsg.textContent = profile.error || "User not found on GitHub.";
+        return;
+      }
+
+      var importedLangs = profile.languages || [];
+      var importedTopics = profile.topics || [];
+      var combined = [];
+
+      importedTopics.forEach(function(t) {
+        var clean = t.replace(/-/g, " ");
+        if (!combined.includes(clean)) combined.push(clean);
+      });
+      importedLangs.forEach(function(l) {
+        if (!combined.includes(l)) combined.push(l);
+      });
+
+      if (combined.length) {
+        state.skills = combined.slice(0, 5);
+        searchBox.value = state.skills.join(" ");
+        renderActiveTags();
+      }
+
+      // Check detected languages in sidebar checkboxes
+      var langInputs = langChipsDeck.querySelectorAll("input");
+      var lowerLangs = importedLangs.map(function(l) { return l.toLowerCase(); });
+      langInputs.forEach(function(inp) {
+        if (lowerLangs.includes(inp.value.toLowerCase())) {
+          inp.checked = true;
+        }
+      });
+
+      ghStatusMsg.className = "gh-status-msg success";
+      ghStatusMsg.textContent = `✓ Imported ${importedLangs.length} languages & ${importedTopics.length} topics from @${user}!`;
+      loadRecommendations();
+
+    } catch (err) {
+      ghStatusMsg.className = "gh-status-msg error";
+      ghStatusMsg.textContent = "Failed to connect to GitHub API.";
+    } finally {
+      ghImportBtn.disabled = false;
+    }
+  }
+
+  if (ghImportBtn) {
+    ghImportBtn.addEventListener("click", handleGitHubImport);
+    ghUsernameInput.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleGitHubImport();
+      }
+    });
+  }
+
+  function renderDisplayedCards() {
+    cardsContainer.innerHTML = "";
+    var sortVal = sortSelect.value;
+    var list = (state.currentDisplayed || []).slice();
+    
+    if (sortVal === "comments") {
+      list.sort(function(a, b) { return a.comments - b.comments; });
+    } else {
+      list.sort(function(a, b) { return b.score - a.score; });
+    }
+
+    list.forEach(function(item) {
+      cardsContainer.appendChild(createCardElement(item, false));
+    });
+
+    resultsCountTitle.textContent = list.length + " Recommended Issues";
+  }
+
+  sortSelect.addEventListener("change", function() {
+    renderDisplayedCards();
+  });
+
+  // Setup Languages Chips in sidebar
+  function setupLanguages(languages) {
+    langChipsDeck.innerHTML = "";
+    languages.forEach(function(lang) {
+      var label = document.createElement("label");
+      label.className = "lang-chip";
+
+      var input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = lang.key;
+      if (lang.key === "python") input.checked = true;
+
+      var face = document.createElement("span");
+      face.className = "lang-chip-face";
+      face.innerHTML = `<i class="lang-dot"></i> <span>${lang.name}</span>`;
+
+      label.appendChild(input);
+      label.appendChild(face);
+      langChipsDeck.appendChild(label);
+
+      input.addEventListener("change", function() {
+        loadRecommendations();
+      });
+    });
+  }
+
+  // Init
+  async function init() {
+    renderActiveTags();
+    try {
+      var res = await fetch("/api/stats");
+      if (res.ok) {
+        var stats = await res.json();
+        setupLanguages(stats.languages);
+      }
+    } catch (e) {
+      console.warn("Could not load stats", e);
+    }
+    loadRecommendations();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
